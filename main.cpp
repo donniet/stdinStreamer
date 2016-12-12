@@ -11,6 +11,9 @@
 #include <vector>
 #include <string>
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 std::mutex connection_mutex;
 std::set<int> connections;
 
@@ -40,15 +43,30 @@ void server(int sockfd) {
 }
 
 int main(int argc, char * argv[]) {
-  std::cout << "Hello!\n";
+  int portno;
+  size_t buffer_size;
 
-  if (argc < 2) {
-    error("invalid port number");
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("port,p", po::value(&portno)->default_value(2222), "port to listen for connections")
+    ("buffer-size,b", po::value(&buffer_size)->default_value(2048), "size of temporary buffer")
+    ("help,h", "print help")
+  ;
+
+  po::positional_options_description p;
+  p.add("port", -1);
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    return 0;
   }
 
-  int sockfd, portno = atoi(argv[1]);
   struct sockaddr_in serv_addr;
-  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0)
     error("ERROR opening socket");
   memset((char *) &serv_addr, 0, sizeof(serv_addr));
@@ -61,9 +79,10 @@ int main(int argc, char * argv[]) {
 
   std::thread server_thread(server, sockfd);
 
-  char buffer[16];
+  char * buffer = new char[buffer_size];
+
   int n;
-  while ((n = read(0, buffer, 16)) > 0) {
+  while ((n = read(0, buffer, buffer_size)) > 0) {
     std::cout << "got data." << std::endl;
     std::vector<int> toremove;
 
@@ -83,6 +102,8 @@ int main(int argc, char * argv[]) {
 
   close(sockfd);
   server_thread.join();
+
+  delete [] buffer;
 
   return 0;
 }
