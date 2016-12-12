@@ -31,7 +31,7 @@ void server(int sockfd) {
     newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 
     if (newsockfd < 0) {
-      std::cout << "invalid sock fd: " << newsockfd << std::endl;
+      // std::cout << "invalid sock fd: " << newsockfd << std::endl;
       break;
     }
     std::cout << "new connection: " << newsockfd << std::endl;
@@ -42,7 +42,13 @@ void server(int sockfd) {
   }
 }
 
+void handle_interrupt(int sig) {
+  close(0);
+}
+
 int main(int argc, char * argv[]) {
+  signal(SIGINT, handle_interrupt);
+
   int portno;
   size_t buffer_size;
 
@@ -83,7 +89,6 @@ int main(int argc, char * argv[]) {
 
   int n;
   while ((n = read(0, buffer, buffer_size)) > 0) {
-    std::cout << "got data." << std::endl;
     std::vector<int> toremove;
 
     std::unique_lock<std::mutex> lock(connection_mutex);
@@ -94,12 +99,14 @@ int main(int argc, char * argv[]) {
       }
     }
     for (auto j = toremove.begin(); j != toremove.end(); j++) {
+      std::cout << "connection closing: " << *j << std::endl;
       close(*j);
       connections.erase(*j);
     }
     lock.unlock();
   }
 
+  std::cout << "closing socket" << std::endl;
   close(sockfd);
   server_thread.join();
 
